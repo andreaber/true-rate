@@ -1,0 +1,9 @@
+{
+  "precio_contado": 100000.0,
+  "CANT C": 12,
+  "monto_cuota": 14315.22,
+  "tipo_pago": "Vencido (fin de período)",
+  "modo": "Calcular tasa (i)",
+  "periodicidad": "Mensual",
+  "fecha_inicial": "2025-08-28"
+}

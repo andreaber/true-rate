@@ -1,0 +1,9 @@
+{
+  "precio_contado": 800000.0,
+  "monto_cuota": 95000.0,
+  "tasa_periodo": 0.06,
+  "tipo_pago": "Adelantado (inicio de período)",
+  "modo": "Calcular cuotas (n)",
+  "periodicidad": "Trimestral",
+  "fecha_inicial": "2025-09-01"
+}
