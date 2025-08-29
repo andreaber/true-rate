@@ -62,9 +62,6 @@ st.markdown(
 
 
 
-
-
-
 # carga .env en variables de entorno
 load_dotenv()
 
@@ -273,154 +270,6 @@ with col2:
         except Exception as e:
             st.error(f"Archivo inválido: {e}")
 # --- fin Uploaders ---
-
-
-
-
-
-
-
-
-# # -- Cargar desde archivo (JSON) ---
-# # uploader = st.file_uploader("Cargar desde archivo (JSON)", type=["json"], key="upl_json")
-
-# # --- Cargar desde archivo (JSON) ---
-# with st.container():
-#     st.markdown(
-#         """
-#         <div style="max-width:600px; margin:auto; padding:15px; background-color:#1b1e27; border-radius:12px;">
-#             <h4 style="color:#FAFAFA; margin-bottom:10px;">Cargar desde archivo (JSON)</h4>
-#         </div>
-#         """,
-#         unsafe_allow_html=True
-#     )
-#     uploader = st.file_uploader("", type=["json"], key="upl_json")
-
-# if uploader is not None:
-#     try:
-#         data = json.load(uploader)
-
-#         # Campos esperados (usamos defaults si faltan)
-#         pv_in   = float(data.get("precio_contado", 0.0))
-#         n_in    = int(data.get("CANT C", 1))
-#         pmt_in  = float(data.get("monto_cuota", 0.0))
-#         tipo_in = str(data.get("tipo_pago", "Vencido (fin de período)"))
-#         modo_in = str(data.get("modo", st.session_state.modo))
-#         i_per   = float(data.get("tasa_periodo", st.session_state.i_periodo))  # fracción (ej: 0.06)
-#         per_in   = data.get("periodicidad", st.session_state.periodicidad)
-#         fecha_in = data.get("fecha_inicial")  # ISO yyyy-mm-dd
-
-
-#         st.session_state.update({
-#             "pv": pv_in,
-#             "n": n_in,
-#             "pmt": pmt_in,
-#             "tipo_pago": "Adelantado (inicio de período)" if tipo_in.lower().startswith("adel") else "Vencido (fin de período)",
-#             "modo": "Calcular cuotas (n)" if "n" in modo_in.lower() else "Calcular tasa (i)",
-#             "i_periodo": i_per,
-#             "resultado": None,
-#             "explicacion": None,
-#             "periodicidad": per_in,
-#             "fecha_inicial": date.fromisoformat(fecha_in) if fecha_in else st.session_state.fecha_inicial,
-#         })
-#         st.success("Archivo cargado. Revisá los campos y hacé clic en «Calcular» según el modo.")
-#     except Exception as e:
-#         st.error(f"Archivo inválido: {e}")
-# # --- fin Cargar desde archivo (JSON) ---
-
-
-# # --- Cargar desde archivo (CSV / Excel) ---
-# with st.container():
-#     st.markdown(
-#         """
-#         <div style="max-width:600px; margin:auto; padding:15px; background-color:#1b1e27; border-radius:12px;">
-#             <h4 style="color:#FAFAFA; margin-bottom:10px;">Cargar desde archivo (CSV / Excel)</h4>
-#         </div>
-#         """,
-#         unsafe_allow_html=True
-#     )
-#     upl_tabla = st.file_uploader("", type=["csv", "xlsx", "xls"], key="upl_tabla")
-# # --- Cargar desde archivo (CSV / Excel) ---
-# # upl_tabla = st.file_uploader("Cargar desde archivo (CSV / Excel)", type=["csv", "xlsx", "xls"], key="upl_tabla")
-
-
-
-# if upl_tabla is not None:
-#     try:
-#         # Leer archivo
-#         if upl_tabla.name.lower().endswith(".csv"):
-#             try:
-#                 df_in = pd.read_csv(upl_tabla)              # decimal con punto
-#             except Exception:
-#                 upl_tabla.seek(0)
-#                 df_in = pd.read_csv(upl_tabla, decimal=",") # fallback coma decimal
-#         else:
-#             df_in = pd.read_excel(upl_tabla, engine="openpyxl")
-
-#         if df_in.empty:
-#             st.error("El archivo no tiene filas.")
-#         else:
-#             # Tomamos la primera fila como escenario
-#             row = {str(k).strip(): row for k, row in df_in.iloc[0].to_dict().items()}
-
-#             def pick(*names):
-#                 for n in names:
-#                     if n in row and pd.notna(row[n]):
-#                         return row[n]
-#                 return None
-
-#             # Encabezados esperados (aceptamos alias comunes)
-#             pv_in   = pick("precio_contado", "contado", "precio")
-#             n_in    = pick("CANT C", "cant_c", "cuotas", "n")
-#             pmt_in  = pick("monto_cuota", "cuota", "pmt")
-#             tipo_in = pick("tipo_pago")
-#             i_per   = pick("tasa_periodo", "i_periodo", "tasa", "i")
-
-#             # Helpers para convertir números con coma o punto
-#             def to_float(x):
-#                 if x is None: return None
-#                 s = str(x).strip().replace(" ", "")
-#                 # quita separador de miles común y estandariza decimal
-#                 s = s.replace(".", "").replace(",", ".") if s.count(",") == 1 and s.count(".") >= 1 else s.replace(",", ".")
-#                 try:
-#                     return float(s)
-#                 except Exception:
-#                     return None
-
-#             pv_f   = to_float(pv_in)
-#             n_f    = int(to_float(n_in)) if n_in is not None else None
-#             pmt_f  = to_float(pmt_in)
-#             i_f    = to_float(i_per)
-
-#             # Decidir modo según columnas presentes
-#             if pv_f is not None and pmt_f is not None and n_f is not None:
-#                 modo_in = "Calcular tasa (i)"
-#             elif pv_f is not None and pmt_f is not None and i_f is not None:
-#                 modo_in = "Calcular cuotas (n)"
-#             else:
-#                 st.error("Faltan columnas: para modo i → precio_contado, CANT C, monto_cuota; "
-#                          "para modo n → precio_contado, monto_cuota, tasa_periodo.")
-#                 modo_in = None
-
-#             if modo_in:
-#                 st.session_state.update({
-#                     "pv": pv_f if pv_f is not None else 0.0,
-#                     "n": n_f if n_f is not None else 1,
-#                     "pmt": pmt_f if pmt_f is not None else 0.0,
-#                     "tipo_pago": ("Adelantado (inicio de período)" if str(tipo_in).lower().startswith("adel") else "Vencido (fin de período)")
-#                                  if tipo_in is not None else st.session_state.tipo_pago,
-#                     "modo": modo_in,
-#                     "i_periodo": i_f if i_f is not None else st.session_state.i_periodo,
-#                     "resultado": None,
-#                     "explicacion": None,
-#                 })
-#                 st.success(f"Archivo cargado en modo: {modo_in}. Revisá y luego tocá «Calcular».")
-#     except Exception as e:
-#         st.error(f"Archivo inválido: {e}")
-# # --- fin Cargar desde archivo (CSV / Excel) ---
-
-
-
 
 
 
@@ -698,31 +547,7 @@ if st.session_state.resultado:
         # --- fin gráfico ---
 
 
-
-        # # --- Gráfico de flujo vs contado ---
-        # import altair as alt
-
-        # st.markdown("### 📊 Flujo de pagos vs contado")
-
-        # chart_df = df_flujo.copy()
-        # chart_df["contado"] = pv  # línea de referencia
-
-        # barras = alt.Chart(chart_df).mark_bar(color="#00909a", opacity=0.7).encode(
-        #     x=alt.X("fecha_pago:T", title="Fecha de pago"),
-        #     y=alt.Y("cuota:Q", title="Monto de cuota"),
-        #     tooltip=["fecha_pago:T", "cuota:Q"]
-        # )
-
-        # linea = alt.Chart(chart_df).mark_line(color="red", strokeWidth=2).encode(
-        #     x="fecha_pago:T",
-        #     y=alt.Y("contado:Q", title="Precio contado"),
-        #     tooltip=["contado:Q"]
-        # )
-
-        # chart = (barras + linea).properties(height=350)
-        # st.altair_chart(chart, use_container_width=True)
-
-        
+          
         
         # --- Gráfico de flujo vs contado con doble eje Y ---
         import altair as alt
@@ -751,8 +576,6 @@ if st.session_state.resultado:
 
         st.altair_chart(chart, use_container_width=True)
         # --- fin gráfico ---
-
-
 
 
 
@@ -1037,71 +860,6 @@ if st.session_state.escenarios:
 
 
 
-# Nombre del escenario a guardar
-# st.text_input("Nombre del escenario", key="escenario_nombre", placeholder="Ej: Caso base 12x14.315")
-
-# cols = st.columns(3)
-# with cols[0]:
-#     if st.button("💾 Guardar escenario"):
-#         nombre = (st.session_state.escenario_nombre or "").strip()
-#         if not nombre:
-#             st.warning("Poné un nombre para el escenario.")
-#         else:
-#             st.session_state.escenarios[nombre] = {
-#                 "pv": float(st.session_state.pv),
-#                 "n": int(st.session_state.n),
-#                 "pmt": float(st.session_state.pmt),
-#                 "tipo_pago": st.session_state.tipo_pago,
-#                 "modo": st.session_state.modo,
-#                 "i_periodo": float(st.session_state.i_periodo),
-#                 "periodicidad": st.session_state.periodicidad,
-#                 "fecha_inicial": st.session_state.fecha_inicial,
-#                 # opcional: guardamos último resultado para comparar luego
-#                 "resultado": st.session_state.resultado,
-#             }
-#             st.success(f"Escenario “{nombre}” guardado.")
-
-# with cols[1]:
-#     opciones = ["(ninguno)"] + sorted(st.session_state.escenarios.keys())
-#     st.selectbox("Cargar escenario", options=opciones, key="escenario_sel")
-
-# with cols[2]:
-#     if st.button("📥 Cargar"):
-#         sel = st.session_state.escenario_sel
-#         if sel and sel != "(ninguno)" and sel in st.session_state.escenarios:
-#             e = st.session_state.escenarios[sel]
-#             st.session_state.pv           = e.get("pv", 0.0)
-#             st.session_state.n            = e.get("n", 1)
-#             st.session_state.pmt          = e.get("pmt", 0.0)
-#             st.session_state.tipo_pago    = e.get("tipo_pago", "Vencido (fin de período)")
-#             st.session_state.modo         = e.get("modo", "Calcular tasa (i)")
-#             st.session_state.i_periodo    = e.get("i_periodo", 0.0)
-#             st.session_state.periodicidad = e.get("periodicidad", "Mensual")
-#             st.session_state.fecha_inicial = e.get("fecha_inicial", st.session_state.fecha_inicial) 
-#             st.info(f"Escenario “{sel}” cargado. Revisá los campos y presioná **Calcular**.")
-
-# # Listado compacto de escenarios guardados
-# if st.session_state.escenarios:
-#     st.caption("Escenarios guardados:")
-#     st.dataframe(
-#         pd.DataFrame([
-#             {
-#                 "nombre": k,
-#                 "modo": v.get("modo", ""),
-#                 "tipo_pago": v.get("tipo_pago", ""),
-#                 "pv": v.get("pv", 0.0),
-#                 "n": v.get("n", 0),
-#                 "pmt": v.get("pmt", 0.0),
-#             } for k, v in st.session_state.escenarios.items()
-#         ]),
-#         use_container_width=True,
-#         hide_index=True,
-#     )
-# --- fin Escenarios ---
-
-
-
-
 # uploaders + export JSON
 # # st.subheader("📂 Importar / Exportar")
 
@@ -1312,7 +1070,6 @@ if st.session_state.get("explicacion"):
     if st.button("🧹 Limpiar explicación", key="clear_exp"):
         st.session_state.explicacion = None
 # --- fin IA: Explicación ---
-
 
 
 
