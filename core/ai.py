@@ -21,17 +21,19 @@ def explicar_con_ia(
     tea_pct = tea_frac * 100
     tna_pct = tna_frac * 100
 
-    # Lang tag simple
+    # Normalizar idioma
     lang = "es" if (lang or "").lower().startswith("es") else "en"
+    idioma_texto = "en español" if lang == "es" else "in English"
 
+    # Mensaje de sistema con instrucción explícita de idioma
     system_msg = (
-        "Actúas como profesor de Matemática Financiera. Sé claro y conciso (120–180 palabras). "
-        "Usa: prestación, contraprestación, equivalencia financiera, pago vencido/adelantado. "
-        "NO recalcules: utiliza exactamente los valores provistos."
+        f"Actúas como profesor de Matemática Financiera. Sé claro y conciso (120–180 palabras). "
+        f"Usa: prestación, contraprestación, equivalencia financiera, pago vencido/adelantado. "
+        f"NO recalcules: utiliza exactamente los valores provistos."
+        f"Redacta la explicación {idioma_texto}."
     )
 
     user_msg = (
-        f"Idioma: {lang}\n"
         "Datos cerrados (no recalcular):\n"
         f"- precio_contado={pv:,.2f}\n"
         f"- cuotas={n} de {pmt:,.2f}\n"

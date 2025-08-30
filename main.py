@@ -13,6 +13,38 @@ import json
 from pypdf import PdfReader
 
 
+# --- Estado persistente: inicializamos TODO lo que usamos en la app ---
+
+from datetime import date
+
+defaults = {
+    "pv": 0.0,
+    "n": 1,
+    "pmt": 0.0,
+    "tipo_pago": "Vencido (fin de período)",
+    "modo": "Calcular tasa (i)",
+    "i_periodo": 0.0,
+    "periodicidad": "Mensual",
+    "fecha_inicial": date.today(),
+    "resultado": None,
+    "explicacion": None,
+    "kb_text": None,
+    "kb_name": None,
+    "escenarios": {},
+    "escenario_nombre": "",
+    "escenario_sel": "",
+}
+
+# Cargar valores por defecto si aún no existen en session_state
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
+
+# --- fin estado persistente ---
+
+
+
+
 # --- Configuración de página ---
 st.set_page_config(
     page_title="True Rate · Calculadora financiera",
@@ -21,6 +53,7 @@ st.set_page_config(
 )
 # --- fin configuración de página ---
 
+#!------------------------------------------------------------------------------
 
 # --- Encabezado con ícono ---
 st.markdown(
@@ -39,7 +72,7 @@ st.markdown(
             </svg>
             <!-- Texto principal -->
             <h1 style="
-                font-size: 56px;
+                font-size: 60px;
                 color: #00909a;
                 font-family: 'Georgia', 'Times New Roman', serif;
                 font-weight: 800;
@@ -51,7 +84,7 @@ st.markdown(
         <h3 style="color: #ccc; font-weight: 400; margin-top: 10px;">
             Prestación vs. Contraprestación · Pago vencido · Semilla tipo Baily
         </h3>
-        <p style="font-size: 18px; color: #aaa; margin-top: -5px;">
+        <p style="font-size: 18px; color: #aaa; margin-top: -5px; margin-bottom: 70px;">
             Calculá la tasa real y el número de cuotas en tus operaciones financieras
         </p>
     </div>
@@ -60,7 +93,7 @@ st.markdown(
 )
 # --- fin Encabezado ---
 
-
+#!------------------------------------------------------------------------------
 
 # carga .env en variables de entorno
 load_dotenv()
@@ -76,10 +109,12 @@ except Exception:
 
 from core.ai import explicar_con_ia
 
+
 # --- OpenAI client (solo si hay API key) ---
 client = OpenAI(api_key=api_key) if api_key else None
 # --- fin OpenAI client ---
 # st.write("API key cargada:", "sí" if api_key else "no")
+
 
 from core.finanzas import (
     present_value_annuity,
@@ -89,45 +124,15 @@ from core.finanzas import (
 )
 
 
-# --- Estado persistente ---
-if "pv" not in st.session_state: st.session_state.pv = 0.0
-if "n"  not in st.session_state: st.session_state.n  = 1
-if "pmt" not in st.session_state: st.session_state.pmt = 0.0
-if "tipo_pago" not in st.session_state:
-    st.session_state.tipo_pago = "Vencido (fin de período)"
-if "resultado" not in st.session_state: 
-    st.session_state.resultado = None
-if "explicacion" not in st.session_state:
-    st.session_state.explicacion = None
-if "kb_text" not in st.session_state: st.session_state.kb_text = None
-if "kb_name" not in st.session_state: st.session_state.kb_name = None
-# Estado de escenarios (no usado en esta versión)
-if "escenarios" not in st.session_state: st.session_state.escenarios = {}
-if "escenario_nombre" not in st.session_state: st.session_state.escenario_nombre = ""
-if "escenario_sel" not in st.session_state: st.session_state.escenario_sel = ""
-# Modo y tasa por período (para calcular n)
-if "modo" not in st.session_state: st.session_state.modo = "Calcular tasa (i)"
-if "i_periodo" not in st.session_state: st.session_state.i_periodo = 0.0  # fracción
-if "periodicidad" not in st.session_state: st.session_state.periodicidad = "Mensual"
-if "fecha_inicial" not in st.session_state: st.session_state.fecha_inicial = date.today()
-# --- fin estado persistente ---
-
-
+#!------------------------------------------------------------------------------
 
 
 # --- Uploaders en dos columnas (JSON + CSV/Excel) ---
 col1, col2 = st.columns(2)
 
 with col1:
-    # st.markdown("#### 📂 Cargar JSON")
-
     st.markdown(
         """
-        <style>
-        .icon-folder:hover path {
-            stroke: #00c4d4; /* Turquesa más claro en hover */
-        }
-        </style>
         <div style="display:flex; align-items:center; gap:6px;">
             <svg class="icon-folder" xmlns="http://www.w3.org/2000/svg"
                  width="28" height="28"
@@ -141,40 +146,32 @@ with col1:
         """,
         unsafe_allow_html=True
     )
-    uploader = st.file_uploader("", type=["json"], key="upl_json")
 
-
-    # uploader = st.file_uploader("", type=["json"], key="upl_json")
+    uploader = st.file_uploader("Subir JSON", type=["json"], key="upl_json")
 
     if uploader is not None:
         try:
-            data = json.load(uploader)
+            raw_json = uploader.read().decode("utf-8")
+            data = json.loads(raw_json)
 
-            # Campos esperados (usamos defaults si faltan)
-            pv_in   = float(data.get("precio_contado", 0.0))
-            n_in    = int(data.get("CANT C", 1))
-            pmt_in  = float(data.get("monto_cuota", 0.0))
-            tipo_in = str(data.get("tipo_pago", "Vencido (fin de período)"))
-            modo_in = str(data.get("modo", st.session_state.modo))
-            i_per   = float(data.get("tasa_periodo", st.session_state.i_periodo))
-            per_in   = data.get("periodicidad", st.session_state.periodicidad)
-            fecha_in = data.get("fecha_inicial")  # ISO yyyy-mm-dd
+            # 🚀 Guardamos directo en los mismos keys que usan los inputs
+            st.session_state.pv          = float(data.get("pv", 0.0))
+            st.session_state.n           = int(data.get("n", 1))
+            st.session_state.pmt         = float(data.get("pmt", 0.0))
+            st.session_state.tipo_pago   = data.get("tipo_pago", "Vencido (fin de período)")
+            st.session_state.modo        = data.get("modo", "Calcular tasa (i)")
+            st.session_state.i_periodo   = float(data.get("i_periodo", 0.0))
+            st.session_state.periodicidad = data.get("periodicidad", "Mensual")
+            st.session_state.fecha_inicial = date.fromisoformat(data.get("fecha_inicial")) if data.get("fecha_inicial") else date.today()
 
-            st.session_state.update({
-                "pv": pv_in,
-                "n": n_in,
-                "pmt": pmt_in,
-                "tipo_pago": "Adelantado (inicio de período)" if tipo_in.lower().startswith("adel") else "Vencido (fin de período)",
-                "modo": "Calcular cuotas (n)" if "n" in modo_in.lower() else "Calcular tasa (i)",
-                "i_periodo": i_per,
-                "resultado": None,
-                "explicacion": None,
-                "periodicidad": per_in,
-                "fecha_inicial": date.fromisoformat(fecha_in) if fecha_in else st.session_state.fecha_inicial,
-            })
-            st.success("Archivo cargado. Revisá los campos y hacé clic en «Calcular» según el modo.")
+            st.session_state.resultado   = None
+            st.session_state.explicacion = None
+
+            st.success("Archivo cargado y aplicado a los campos.")
         except Exception as e:
             st.error(f"Archivo inválido: {e}")
+
+# --- fin Uploaders JSON ---
 
 with col2:
     # st.markdown("#### 📂 Cargar CSV / Excel")
@@ -272,6 +269,10 @@ with col2:
 # --- fin Uploaders ---
 
 
+#!------------------------------------------------------------------------------
+st.divider()   # ← ÚNICO separador
+
+
 
 # st.subheader("🧮 Datos de entrada")
 
@@ -298,7 +299,9 @@ st.markdown(
 # --- fin Subtítulo ---
 
 
-# --- Inputs principales ---
+# --- Inputs principales (con soporte para preset) ---
+preset = st.session_state.get("preset", {})
+
 col1, col2, col3 = st.columns(3)
 with col1:
     st.number_input("Contraprestación (Precio al contado)", min_value=0.0, step=100.0, format="%.2f", key="pv")
@@ -307,25 +310,32 @@ with col2:
 with col3:
     st.number_input("Prestación (Valor de cada cuota)", min_value=0.0, step=10.0, format="%.2f", key="pmt")
 
+
 # Tipo de pago
 st.radio(
     "Tipo de pago",
     ("Vencido (fin de período)", "Adelantado (inicio de período)"),
-    key="tipo_pago"
+    key="tipo_pago",
+    index=0 if preset.get("tipo_pago", st.session_state.tipo_pago).startswith("Vencido") else 1
 )
 
 # Modo de cálculo
 st.radio(
     "Modo de cálculo",
     ("Calcular tasa (i)", "Calcular cuotas (n)"),
-    key="modo"
+    key="modo",
+    index=0 if "i" in preset.get("modo", st.session_state.modo).lower() else 1
 )
 
 # Tasa por período (solo si calculamos n)
 if st.session_state.modo == "Calcular cuotas (n)":
     st.number_input(
         "Tasa por período (fracción)",
-        min_value=0.0, step=0.0001, format="%.6f", key="i_periodo"
+        min_value=0.0,
+        step=0.0001,
+        format="%.6f",
+        key="i_periodo",
+        value=preset.get("i_periodo", st.session_state.i_periodo)
     )
 
 # Periodicidad y Fecha inicial
@@ -334,10 +344,20 @@ with cpa:
     st.selectbox(
         "Periodicidad",
         ["Mensual", "Bimestral", "Trimestral", "Cuatrimestral", "Semestral", "Anual"],
-        key="periodicidad"
+        key="periodicidad",
+        index=["Mensual", "Bimestral", "Trimestral", "Cuatrimestral", "Semestral", "Anual"].index(
+            preset.get("periodicidad", st.session_state.periodicidad)
+        )
     )
 with cpb:
-    st.date_input("Fecha inicial", key="fecha_inicial")
+    st.date_input(
+        "Fecha inicial",
+        key="fecha_inicial",
+        value=preset.get("fecha_inicial", st.session_state.fecha_inicial)
+    )
+# --- fin Inputs principales ---
+
+
 
 
 # Ajustes avanzados (solo modo i)
@@ -345,8 +365,19 @@ if st.session_state.modo == "Calcular tasa (i)":
     with st.expander("Ajustes avanzados", expanded=False):
         tol = st.number_input("Tolerancia (convergencia)", value=1e-12, format="%.1e", step=1e-13, key="tol_i")
         max_iter = st.number_input("Máx. iteraciones (Newton)", min_value=10, value=80, step=10, key="max_iter_i")
+
+        # 👉 Texto explicativo
+        st.caption(
+            "ℹ️ **Ajustes avanzados:**\n"
+            "- *Tolerancia (convergencia)*: define qué tan exacto debe ser el resultado. "
+            "Un valor más chico = mayor precisión (ej. 1e-12), más grande = menos precisión pero más rápido (ej. 1e-6).\n"
+            "- *Máx. iteraciones*: número máximo de intentos del algoritmo. "
+            "Normalmente no hace falta cambiarlo (80 asegura que siempre se encuentre la tasa)."
+        )
 else:
-    tol, max_iter = 1e-12, 80  # valores por defecto para cuando no se usan
+    tol, max_iter = 1e-12, 80  # valores por defecto cuando no se usan
+
+
 
 
 # Botón de cálculo (según modo)
@@ -358,11 +389,16 @@ if st.session_state.modo == "Calcular tasa (i)":
         if pv > 0 and pmt > 0 and n > 0:
             adelantado = st.session_state.tipo_pago.startswith("Adelantado")
             i, trace = solve_monthly_rate_trace(pv, pmt, n, adelantado=adelantado, tol=tol, max_iter=int(max_iter))
-            st.session_state.resultado = {
+            st.session_state["resultado"] = {
                 "modo": "Calcular tasa (i)",
-                "pv": pv, "n": n, "pmt": pmt,
-                "adelantado": adelantado, "i": i, "trace": trace,
-                "tol": float(tol), "max_iter": int(max_iter),
+                "pv": pv, 
+                "n": n, 
+                "pmt": pmt,
+                "adelantado": adelantado, 
+                "i": i, 
+                "trace": trace,
+                "tol": float(tol), 
+                "max_iter": int(max_iter),
             }
             st.session_state.explicacion = None
         else:
@@ -386,36 +422,80 @@ else:
         else:
             n_real = -math.log(1 - x) / math.log(1 + i)
             n_red  = math.ceil(n_real)
-            st.session_state.resultado = {
+            st.session_state["resultado"] = {
                 "modo": "Calcular cuotas (n)",
-                "pv": pv, "n": n_red, "pmt": pmt,
-                "adelantado": adelantado, "i": i, "trace": None,
+                "pv": pv, 
+                "n": n_red, 
+                "pmt": pmt,
+                "adelantado": adelantado, 
+                "i": i, 
+                "trace": None,
             }
             st.session_state.explicacion = None
 
-# --- Botón: Reset (deja todo en neutro) ---
-if st.button("Reset"):
-    st.session_state.update({
-        "pv": 0.0, 
-        "n": 1, 
-        "pmt": 0.0,
-        "tipo_pago": "Vencido (fin de período)",
-        "resultado": None,
-        "explicacion": None,
-    })
-    st.info("Campos reseteados.")
+
+# --- Estilos para botón Reset ---
+st.markdown(
+    """
+    <style>
+    .reset-btn {
+        background-color: #2E2E3F;
+        color: #FAFAFA;
+        border: 1px solid #FF4B4B;
+        border-radius: 8px;
+        padding: 0.6em 1em;
+        font-weight: 600;
+        cursor: pointer;
+        width: 30%;              /* 👈 ancho del botón */
+        display: block;          /* para centrar */
+        margin: 0 auto;          /* centrado horizontal */
+        text-align: center;
+    }
+    .reset-btn:hover {
+        background-color: #FF4B4B !important;
+        color: #FFFFFF !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# --- Botón Reset con HTML ---
+reset = st.markdown(
+    """
+    <form action="" method="get">
+        <button class="reset-btn" type="submit">🔄 Resetear todo</button>
+    </form>
+    """,
+    unsafe_allow_html=True
+)
+
+# --- Lógica de reset ---
+# Cuando hacés clic, la página se recarga (submit → rerun)
+if st.query_params:  # detecta que el form "ejecutó"
+    for k in ["pv", "n", "pmt", "tipo_pago", "i_periodo", "resultado", "explicacion"]:
+        if k in st.session_state:
+            del st.session_state[k]
+    st.info("Campos reseteados. Volvé a ingresar los datos.")
+    st.rerun()
+
 # --- fin Botón: Reset ---
 
 
+
+#!------------------------------------------------------------------------------
 
 
 st.divider()   # ← ÚNICO separador entre entrada/import y resultados
 
 
+#!------------------------------------------------------------------------------
+
+
 # 📊 Resultados: Bloque de Resultados y descargas (persisten al hacer clic) ---
 # st.subheader("📊 Resultados y descargas")
 
-if st.session_state.resultado:
+if st.session_state.get("resultado"):
     # --- Subtítulo: Resultados ---
     st.markdown(
         """
@@ -439,7 +519,7 @@ if st.session_state.resultado:
 
 
     # --- Desempaquetar resultado ---
-    r     = st.session_state.resultado
+    r     = st.session_state.get("resultado", {})
     modo  = r.get("modo", "Calcular tasa (i)")
     pv, n, pmt = r["pv"], r["n"], r["pmt"]
     adelantado, i = r["adelantado"], r["i"]
@@ -758,6 +838,8 @@ if st.session_state.resultado:
 # --- fin resultados y descargas ---
 
 
+#!------------------------------------------------------------------------------
+
 
 
 # --- Escenarios (guardar/cargar) ---
@@ -805,37 +887,40 @@ with col2:
                 "i_periodo": float(st.session_state.i_periodo),
                 "periodicidad": st.session_state.periodicidad,
                 "fecha_inicial": st.session_state.fecha_inicial,
-                "resultado": st.session_state.resultado,
+                "resultado": st.session_state.get("resultado", {}),
             }
             st.success(f"Escenario “{nombre}” guardado.")
 
 
 
-# --- Fila 2: cargar escenario ---
+# --- Fila 2: Cargar escenario ---
 col3, col4 = st.columns([4,1])
+
 with col3:
     opciones = ["(ninguno)"] + sorted(st.session_state.escenarios.keys())
-    escenario_sel = st.selectbox(
-        "Seleccionar escenario guardado",
-        options=opciones,
-        key="escenario_sel"
-    )
+    escenario_sel = st.selectbox("Seleccionar escenario guardado", options=opciones, key="escenario_sel")
+
 with col4:
-    # Empujamos el botón hacia abajo para alinear con el selectbox
-    st.write("")
-    st.write("")
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)  # alinear arriba
     if st.button("📥 Cargar", use_container_width=True):
-        if escenario_sel and escenario_sel != "(ninguno)" and escenario_sel in st.session_state.escenarios:
-            e = st.session_state.escenarios[escenario_sel]
-            st.session_state.pv           = e.get("pv", 0.0)
-            st.session_state.n            = e.get("n", 1)
-            st.session_state.pmt          = e.get("pmt", 0.0)
-            st.session_state.tipo_pago    = e.get("tipo_pago", "Vencido (fin de período)")
-            st.session_state.modo         = e.get("modo", "Calcular tasa (i)")
-            st.session_state.i_periodo    = e.get("i_periodo", 0.0)
-            st.session_state.periodicidad = e.get("periodicidad", "Mensual")
-            st.session_state.fecha_inicial = e.get("fecha_inicial", st.session_state.fecha_inicial) 
-            st.info(f"Escenario “{escenario_sel}” cargado. Revisá los campos y presioná **Calcular**.")
+        sel = st.session_state.escenario_sel
+        if sel and sel != "(ninguno)" and sel in st.session_state.escenarios:
+            e = st.session_state.escenarios[sel]
+            st.session_state["preset"] = {
+                "pv": e.get("pv", 0.0),
+                "n": e.get("n", 1),
+                "pmt": e.get("pmt", 0.0),
+                "tipo_pago": e.get("tipo_pago", "Vencido (fin de período)"),
+                "modo": e.get("modo", "Calcular tasa (i)"),
+                "i_periodo": e.get("i_periodo", 0.0),
+                "periodicidad": e.get("periodicidad", "Mensual"),
+                "fecha_inicial": e.get("fecha_inicial", st.session_state.fecha_inicial),
+                "resultado": None,
+                "explicacion": None,
+            }
+            st.success(f"Escenario “{sel}” cargado. Revisá los campos y presioná **Calcular**.")
+            st.rerun()  # 👈 forzamos recarga antes de que se pinten los widgets
+# --- fin Fila 2 ---
 
 
 
@@ -858,6 +943,9 @@ if st.session_state.escenarios:
     )
 # --- Escenarios (guardar/cargar) ---
 
+
+#!------------------------------------------------------------------------------
+st.divider()   # ← ÚNICO separador
 
 
 # uploaders + export JSON
@@ -885,18 +973,24 @@ st.markdown(
 # --- fin Subtítulo ---
 
 
-# --- Botón: Cargar ejemplo (pre-carga, sin calcular) ---
+# --- Botón: Cargar ejemplo ---
 if st.button("Cargar ejemplo"):
-    st.session_state.update({
+    st.session_state["preset"] = {
         "pv": 100000.00,
         "n": 12,
         "pmt": 14315.22,
         "tipo_pago": "Vencido (fin de período)",
-        "resultado": None,    # limpia resultados previos
-        "explicacion": None,  # limpia explicación IA previa
-    })
+        "modo": "Calcular tasa (i)",
+        "i_periodo": 0.0,
+        "periodicidad": "Mensual",
+        "fecha_inicial": date(2025, 8, 29),
+        "resultado": None,
+        "explicacion": None,
+    }
     st.success("Ejemplo cargado. Ahora hacé clic en «Calcular tasa».")
+    st.rerun()
 # --- fin Botón: Cargar ejemplo ---
+
 
 
 # --- Exportar escenario como JSON ---
@@ -910,12 +1004,14 @@ if st.button("Exportar escenario actual como JSON"):
         "fecha_inicial": st.session_state.fecha_inicial.isoformat(),
     }
     if st.session_state.modo == "Calcular tasa (i)":
-        data["CANT C"] = int(st.session_state.n)
+        data["CANT C"] = int(st.session_state.get("n", 0))
         # si ya calculaste la tasa, la incluimos como referencia
-        if st.session_state.resultado and "i" in st.session_state.resultado:
-            data["tasa_periodo_calculada"] = float(st.session_state.resultado["i"])  # fracción
+        resultado = st.session_state.get("resultado")
+        if resultado and "i" in resultado:
+            data["tasa_periodo_calculada"] = float(resultado["i"])  # fracción
     else:  # "Calcular cuotas (n)"
-        data["tasa_periodo"] = float(st.session_state.i_periodo)  # fracción
+        data["tasa_periodo"] = float(st.session_state.get("i_periodo", 0.0))  # fracción
+
 
     json_bytes = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
     st.download_button(
@@ -928,6 +1024,8 @@ if st.button("Exportar escenario actual como JSON"):
 
 
 
+#!------------------------------------------------------------------------------
+st.divider()   # ← ÚNICO separador
 
 
 
@@ -957,7 +1055,6 @@ st.markdown(
 )
 # --- fin Subtítulo ---
 
-
 # Selector de idioma
 _opt = st.selectbox("Idioma de la explicación", ["Español", "English"], index=0, key="ia_lang")
 lang = "es" if _opt.startswith("Esp") else "en"
@@ -972,9 +1069,14 @@ lang = "es" if st.session_state.get("ia_lang", "Español").startswith("Esp") els
 
 if st.button("✨ Explicar con IA", type="primary", disabled=not has_result,
              help="Genera una explicación con los valores ya calculados (sin recalcular)."):
-    r = st.session_state.resultado
-    pv, n, pmt = float(r["pv"]), int(r["n"]), float(r["pmt"])
-    adelantado, i = bool(r["adelantado"]), float(r["i"])
+    r = st.session_state.get("resultado", {})
+
+    # Lectura segura de valores
+    pv  = float(r.get("pv", 0.0))
+    n   = int(r.get("n", r.get("n_red", 0)))
+    pmt = float(r.get("pmt", 0.0))
+    adelantado = bool(r.get("adelantado", False))
+    i   = float(r.get("i", 0.0))
 
     with st.spinner("Generando explicación…"):
         out = explicar_con_ia(
@@ -988,12 +1090,20 @@ if st.button("✨ Explicar con IA", type="primary", disabled=not has_result,
     st.session_state.explicacion = out["text"]
 
 
+# Botón limpiar (primero)
+if st.button("🧹 Limpiar explicación", key="clear_exp"):
+    st.session_state.explicacion = None
+
+# Mostrar explicación (después)
+if st.session_state.get("explicacion"):
+    st.info(st.session_state.explicacion)
+
+
+
+st.divider()   # ← ÚNICO separador
 
 
 # --- 📚 Tutor IA (conceptos) + PDF opcional ---
-# st.subheader("📚 Tutor IA (conceptos)")
-
-# --- Subtítulo: Tutor IA (conceptos) ---
 st.markdown(
     """
     <div style="display:flex; align-items:center; gap:10px; margin-top:25px; margin-bottom:15px;">
@@ -1012,8 +1122,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-# --- fin Subtítulo ---
-
 
 # 1) Subida de PDF (opcional)
 upl_pdf = st.file_uploader("Subir una fuente PDF (opcional)", type=["pdf"], key="kb_upl")
@@ -1034,10 +1142,9 @@ q = st.text_input("Preguntá algo de matemática financiera (p. ej. '¿Cómo se 
 btn_disabled = (not q)
 if st.button("💬 Responder (IA)", type="secondary", disabled=btn_disabled,
              help="Responde usando la fuente PDF si está cargada; no recalcula, solo explica."):
-    kb = st.session_state.kb_text or ""
-    # Limite corto para no desbordar el contexto (ajustable)
+    kb = st.session_state.get("kb_text", "")
     kb_short = kb[:12000]
-    kb_name = st.session_state.kb_name or "fuente"
+    kb_name = st.session_state.get("kb_name", "fuente")
 
     system = (
         "Asistente de Matemática Financiera. Responde de forma clara y breve (6–10 líneas). "
@@ -1064,13 +1171,7 @@ if st.button("💬 Responder (IA)", type="secondary", disabled=btn_disabled,
 
 
 
-# Mostrar / limpiar explicación
-if st.session_state.get("explicacion"):
-    st.info(st.session_state.explicacion)
-    if st.button("🧹 Limpiar explicación", key="clear_exp"):
-        st.session_state.explicacion = None
-# --- fin IA: Explicación ---
-
+#!------------------------------------------------------------------------------
 
 
 
