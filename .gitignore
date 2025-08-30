@@ -2,3 +2,6 @@
 __pycache__/
 .vscode/
 *.pyc
+.venv/
+.streamlit/secrets.toml
+main_prueba.py
